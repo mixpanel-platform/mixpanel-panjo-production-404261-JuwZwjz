@@ -5,11 +5,125 @@
     <link rel="stylesheet" type="text/css" href="https://cdn.mxpnl.com/libs/mixpanel-platform/css/reset.css">
     <link rel="stylesheet" type="text/css" href="https://cdn.mxpnl.com/libs/mixpanel-platform/build/mixpanel-platform.v0.latest.min.css">
     <script src="https://cdn.mxpnl.com/libs/mixpanel-platform/build/mixpanel-platform.v0.latest.min.js"></script>
+    <style>
+      h1{
+        font-size: 23px;
+        color: #545454;
+        width:50%;
+        float:left;
+      }
+      .halfChart{
+        width:50%;
+        float:left;
+      }
+    </style>
   </head>
   <body class="mixpanel-platform-body">
-    <h1>Hello, World!</h1>
+    <div class="mixpanel-platform-section">
+      <div id="dateSelect" style="float: right;"></div>
+      <div style="clear: both;"></div>
+      
+      <h1>1. Average Daily Users (per week)</h1><br clear="all" /><br clear="all" />
+      <div id="graphOne"></div><br clear="all" />
+      
+      <br clear="all" /><hr /><br clear="all" /><br clear="all" />
+      
+    </div>
+    
     <script>
-      // Run queries and display results here
+      /* Run query upon doc load */
+      $(document).ready(function(){
+        runQuery();
+      });
+    
+      /* Set some variables */
+      var graphOne = $('#graphOne').MPChart({chartType: 'line'});
+      var startDate = new Date('December 29, 2014');
+      
+      /* Helper function: Get object size */
+      Object.size = function(obj) {
+        var size = 0, key;
+        for (key in obj) {
+            if (obj.hasOwnProperty(key)) size++;
+        }
+        return size;
+      };
+      
+      /* ** Main Mixpanel query function ** */
+      var runQuery = function() {
+        
+        /* Graph 1: Average mobile daily users per week TODO: change event names*/
+        // Query weekly unique users who viewed product (mainly to get start of week dates) 
+        var $iphoneViewProduct = MP.api.segment("Viewed Product", {
+              from: startDate,
+              to: moment(),
+              unit: 'week',
+              type: 'unique',
+              'where': 'properties["Platform"] == "iPhone"'
+        });
+        // Query all unique users who viewed product in a day (since start date)
+        var $iphoneViewProductDay = MP.api.segment("Viewed Product", {
+              from: startDate,
+              to: moment(),
+              unit: 'day',
+              type: 'unique',
+              'where': 'properties["Platform"] == "iPhone"'
+        });
+        // Query all unique users who viewed product in a day (since start date)
+        var $iphoneViewListingDay = MP.api.segment("Viewed A Listing", {
+          from: startDate,
+          to: moment(),
+          unit: 'day',
+          type: 'unique',
+          'where': 'properties["Platform"] == "iPhone"'
+        });
+        /* Graph 1 build */
+        // When above queries are done, run calculations and build graph
+        $.when($iphoneViewProduct, $iphoneViewListingDay, $iphoneViewProductDay).done(function(iphoneViewProduct, iphoneViewListingDay, iphoneViewProductDay) {
+          // Create object for daily averages grouped per week
+          var graphObj = {};
+          graphObj['Daily Average'] = {};
+          // Create date lists - one list of every day, one list of every week
+          var weekList = [];
+          var dayList = [];
+          for(week in iphoneViewProduct.values()['Viewed Product']){
+            weekList.push(week);
+          }
+          for(day in iphoneViewProductDay.values()['Viewed Product']) {
+            dayList.push(day);
+          }
+          // Sort lists from least current date to most current date
+          weekList.sort();
+          dayList.sort();
+          // - debug - console.log(iphoneViewProductDay.values()['Button Clicked']);
+          // - debug - console.log(iphoneViewListingDay.values()['Application Opened']);
+          // Initialize the start index for the week as one week ahead of the start day
+          var weekIndex = 1; 
+          var weeklySum = 0;
+          // Go through each day (since start day) in order
+          for(var i = 0; i < dayList.length; i++){
+            // If the day we're on equals the week ahead, we've summed up all unique counts for the week 
+            if(dayList[i] == weekList[weekIndex]){
+              // Take average (total sum of uniques per day over the week divided by 7) and add it to our graph object
+              // Notice we do this for weekIndex-1, this is because we're setting the average to the week we just went through, not the week we're starting (week index is always one week ahead of the one we're on)
+              graphObj['Daily Average'][weekList[weekIndex-1]] = weeklySum/7;
+              // Reset weekly sum and increment the week index 
+              weeklySum = 0;
+              weekIndex++;
+            }
+            // If our day date doesn't equal the start of the next week, add to our weekly sum
+            else {
+              weeklySum += iphoneViewProductDay.values()['Viewed Product'][dayList[i]] + iphoneViewListingDay.values()['Viewed A Listing'][dayList[i]];
+            }
+          }
+          // Graph our results (i.e. average daily unique users over a week)
+          graphOne.MPChart('setData', graphObj);
+        });
+        /* End of Graph 1 build */
+        
+      };
+    /* End query */
+
     </script>
   </body>
 </html>
